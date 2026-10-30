@@ -1,12 +1,30 @@
+# Build output
 target/
+
+# Version control
 .git/
 .gitignore
+
+# IDE / editor
 .idea/
 *.iml
 .vscode/
 .DS_Store
 *.log
+
+# CI / container definitions (not needed inside the build context)
 Dockerfile
+.dockerignore
 docker-compose.yml
 Jenkinsfile
+nginx/
+jenkins/
+
+# Documentation and report assets
 README.md
+REPORT.md
+docs/
+*.pdf
+*.docx
+*.png
+*.jpg
