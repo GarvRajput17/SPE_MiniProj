@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   calculator-app-1:
     build:
