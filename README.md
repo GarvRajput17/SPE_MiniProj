@@ -228,8 +228,13 @@ The server will start at `http://localhost:8081`.
 ## 4. Docker & Multi-Stage Build
 
 The multi-stage `Dockerfile`:
-- **Stage 1 (Builder)**: Uses `maven:3.9-eclipse-temurin-17-alpine` to cache dependencies (`pom.xml` layer) and compile the JAR.
-- **Stage 2 (Runtime)**: Uses slim `eclipse-temurin:17-jre-alpine` runtime. Creates a dedicated non-root user (`appuser`) and exposes port `8081`.
+- **Stage 1 (Builder)**: Uses `maven:3.9-eclipse-temurin-17` to cache dependencies (`pom.xml` layer) and compile the JAR.
+- **Stage 2 (Runtime)**: Uses slim `bellsoft/liberica-openjre-alpine:17` (221 MB on disk). Creates a dedicated non-root user (`appuser`) and exposes port `8081`.
+
+> **Why not `eclipse-temurin:17-jre-alpine`?** Temurin publishes its Alpine
+> variants for `linux/amd64` only, so that base image cannot be resolved on
+> Apple Silicon (`no match for platform in manifest`). Liberica publishes both
+> `linux/amd64` and `linux/arm64` while staying Alpine-slim.
 
 ### Build Image Manually
 ```bash

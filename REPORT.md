@@ -4,8 +4,8 @@
 **Name:** Garv Rajput  
 **Roll No:** [Your Roll No Here]  
 **Faculty:** Prof. B. Thangaraju  
-**Repository:** `https://github.com/garvrajput/calculator-devops` *(or your GitHub URL)*  
-**Docker Hub:** `https://hub.docker.com/r/garvrajput/calculator` *(or your Docker Hub repo)*  
+**Repository:** https://github.com/GarvRajput17/SPE_MiniProj  
+**Docker Hub:** https://hub.docker.com/r/garvrajput17/calculator (public)  
 
 ---
 
@@ -81,16 +81,16 @@ The declarative pipeline is versioned inside `Jenkinsfile`.
 | **Test** | `mvn -B test` | Executes 27 JUnit 5 unit and MockMvc integration tests; publishes JUnit XML reports. A failed test aborts the pipeline. |
 | **Docker Build** | `docker build -t $DOCKER_IMAGE:$BUILD_NUMBER -t $DOCKER_IMAGE:latest .` | Builds the multi-stage Docker image using cached dependencies and tags it with build number and `:latest`. |
 | **Push** | `withCredentials(...) { docker push ... }` | Authenticates securely to Docker Hub using Jenkins credentials and pushes both tags. Credentials are never logged. |
-| **Deploy** | `IMAGE_TAG=$BUILD_NUMBER docker compose up -d --no-build` | Deploys the stack with zero downtime, polls health status up to 120s, and validates `/actuator/health` via Nginx. |
-| **Post Actions** | `mail to: 'Garv.Rajput@iiitb.ac.in', ...` | Sends an email notification on build success or failure with console link. |
+| **Deploy** | `IMAGE_TAG=$BUILD_NUMBER docker compose up -d --no-build` | Reconciles the stack in place, polls container health for up to 150s, then smoke-tests the API through Nginx — including asserting that divide-by-zero still returns HTTP 400. |
+| **Post Actions** | `mail to: 'garvgrez@gmail.com', ...` | Sends an email notification on build success or failure with console link. |
 
 ---
 
 ### 4. Docker & Docker Compose Design
 
 #### Multi-Stage Dockerfile
-- **Stage 1 (Maven Builder):** Uses `maven:3.9-eclipse-temurin-17-alpine`. `pom.xml` is copied and `mvn dependency:go-offline` is executed first to leverage Docker layer caching.
-- **Stage 2 (Runtime):** Uses lightweight `eclipse-temurin:17-jre-alpine` (~90 MB compressed). An unprivileged user `appuser` is created and assigned ownership. Port `8081` is exposed.
+- **Stage 1 (Maven Builder):** Uses `maven:3.9-eclipse-temurin-17`. `pom.xml` is copied and `mvn dependency:go-offline` is executed first to leverage Docker layer caching.
+- **Stage 2 (Runtime):** Uses lightweight `bellsoft/liberica-openjre-alpine:17` (221 MB on disk, 66 MB compressed on Docker Hub). An unprivileged user `appuser` is created and assigned ownership. Port `8081` is exposed and the JVM is exec'd as PID 1 so container stop signals propagate cleanly.
 
 #### Multi-Container Deployment
 - **Replication:** Runs two identical application instances (`calculator-app-1` and `calculator-app-2`) listening on internal port 8081.
