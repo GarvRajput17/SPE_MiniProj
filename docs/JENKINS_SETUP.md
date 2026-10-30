@@ -264,3 +264,33 @@ Deploy         SUCCESS    13.1s      2 replicas + nginx healthy
 | `no match for platform in manifest` during Docker Build | Base image has no `arm64` variant | See the base-image note in `README.md` §4 |
 | Push to GitHub does not start a build | ngrok URL rotated | Re-point Jenkins URL + webhook (§5); poll still covers it within 2 min |
 | Build hangs in Deploy, then times out | A container never reports healthy | Stage dumps `compose ps` + logs on timeout; check `/actuator/health` |
+| `curl: (22) ... returned error: 502` in Deploy | App containers were recreated with new IPs; Nginx cached the old ones at worker startup | Deploy now issues `nginx -s reload` after the replicas are healthy — see below |
+
+### The 502-after-redeploy trap
+
+`docker compose up -d` recreates the application containers when the image tag
+changes, and the new containers get **new IP addresses**. Nginx resolves the
+hostnames in its `upstream` block once, when its worker processes start, and
+caches the result — so it keeps proxying to containers that no longer exist and
+returns `502 Bad Gateway`.
+
+What makes this easy to miss is that the health gate passes anyway:
+
+- each app container's healthcheck probes `127.0.0.1` *inside itself*, which
+  never exercises the Nginx → app path;
+- Nginx's own healthcheck is still reporting the `healthy` it earned **before**
+  the recreate, and needs 5 failures × 10s to flip.
+
+So the stack looks entirely healthy while every real request 502s. The Deploy
+stage therefore issues a graceful reload once the replicas are healthy:
+
+```bash
+docker exec calculator-nginx-1 nginx -s reload
+```
+
+A reload starts new workers that re-resolve the upstreams and retires the old
+ones only after their in-flight requests finish, so it fixes the stale IPs
+without dropping a connection. The stage then smoke-tests through the proxy with
+a bounded retry and asserts that **both** replicas appear as distinct upstreams
+in the Nginx access log — proving load balancing survived the redeploy, not just
+that one replica answered.

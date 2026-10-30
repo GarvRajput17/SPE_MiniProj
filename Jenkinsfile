@@ -117,7 +117,29 @@ pipeline {
                         ELAPSED=$((ELAPSED + 5))
                     done
 
-                    echo "All containers healthy. Smoke-testing the API through Nginx..."
+                    # Recreating the app containers gives them new IPs, but Nginx
+                    # resolves its upstreams once at worker startup and caches them
+                    # forever — so it would keep proxying to the dead containers and
+                    # return 502. A graceful reload re-resolves them without dropping
+                    # any in-flight connection.
+                    echo "Reloading Nginx so it re-resolves the recreated upstreams..."
+                    docker exec calculator-nginx-1 nginx -s reload
+
+                    echo "Smoke-testing the API through Nginx..."
+                    # Bounded retry: the reload swaps worker processes, so the very
+                    # first request after it can still land on a retiring worker.
+                    ATTEMPT=0
+                    until curl -fsS http://localhost/actuator/health >/dev/null 2>&1; do
+                        ATTEMPT=$((ATTEMPT + 1))
+                        if [ "$ATTEMPT" -ge 20 ]; then
+                            echo "API did not become reachable through Nginx"
+                            docker compose -p "$COMPOSE_PROJECT" ps
+                            docker compose -p "$COMPOSE_PROJECT" logs --tail=100 nginx
+                            exit 1
+                        fi
+                        sleep 2
+                    done
+
                     curl -fsS http://localhost/actuator/health
                     echo ""
                     curl -fsS "http://localhost/api/v1/add?a=2&b=3"
@@ -128,6 +150,16 @@ pipeline {
                     CODE=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost/api/v1/divide?a=1&b=0")
                     [ "$CODE" = "400" ] || { echo "expected 400 for divide-by-zero, got $CODE"; exit 1; }
                     echo "Divide-by-zero correctly returned HTTP 400"
+
+                    # Prove both replicas are actually reachable through the proxy,
+                    # not just that one of them answered.
+                    for i in 1 2 3 4 5 6; do
+                        curl -fsS -o /dev/null "http://localhost/api/v1/add?a=$i&b=1"
+                    done
+                    UPSTREAMS=$(docker logs --tail 20 calculator-nginx-1 2>&1 \
+                        | grep -o 'upstream: [0-9.]*:[0-9]*' | sort -u | wc -l | tr -d ' ')
+                    echo "Distinct healthy upstreams serving traffic: $UPSTREAMS"
+                    [ "$UPSTREAMS" -ge 2 ] || { echo "load balancing degraded"; exit 1; }
 
                     docker compose -p "$COMPOSE_PROJECT" ps
                     echo "Deployment successfully verified!"

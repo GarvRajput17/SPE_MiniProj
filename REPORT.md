@@ -1,11 +1,12 @@
 # CSE 816 — Software Production Engineering
+
 ## Mini-Project Report: End-to-End CI/CD Pipeline for a Calculator REST API
 
-**Name:** Garv Rajput  
-**Roll No:** [Your Roll No Here]  
-**Faculty:** Prof. B. Thangaraju  
-**Repository:** https://github.com/GarvRajput17/SPE_MiniProj  
-**Docker Hub:** https://hub.docker.com/r/garvrajput17/calculator (public)  
+**Name:** Garv Rajput
+**Roll No:** [Your Roll No Here]
+**Faculty:** Prof. B. Thangaraju
+**Repository:** https://github.com/GarvRajput17/SPE_MiniProj
+**Docker Hub:** https://hub.docker.com/r/garvrajput17/calculator (public)
 
 ---
 
@@ -16,6 +17,7 @@ Modern software engineering relies on continuous integration and continuous deli
 This project delivers an end-to-end DevOps pipeline for a production-style Calculator REST API built using Java (Spring Boot) and Maven. A single `git push` to GitHub triggers an automated workflow in Jenkins that checks out the source code, runs automated JUnit tests, packages the executable JAR, builds an optimized multi-stage Docker image, pushes it to Docker Hub, and deploys the multi-container stack with Docker Compose behind an Nginx reverse proxy.
 
 The toolchain integrates four core components:
+
 - **Git & GitHub:** Version control, feature branching, and pull request workflows.
 - **Jenkins:** Automation server executing a declarative 6-stage pipeline.
 - **Docker:** Multi-stage image packaging ensuring reproducible environments.
@@ -74,25 +76,27 @@ Clients only access Nginx on port `80`. The application replicas are isolated on
 
 The declarative pipeline is versioned inside `Jenkinsfile`.
 
-| Stage | Command / Action | Description |
-|---|---|---|
-| **Checkout** | `checkout scm` | Fetches the commit that triggered the build from GitHub. |
-| **Build** | `mvn -B clean package -DskipTests` | Compiles source files and produces the executable Spring Boot JAR. |
-| **Test** | `mvn -B test` | Executes 27 JUnit 5 unit and MockMvc integration tests; publishes JUnit XML reports. A failed test aborts the pipeline. |
-| **Docker Build** | `docker build -t $DOCKER_IMAGE:$BUILD_NUMBER -t $DOCKER_IMAGE:latest .` | Builds the multi-stage Docker image using cached dependencies and tags it with build number and `:latest`. |
-| **Push** | `withCredentials(...) { docker push ... }` | Authenticates securely to Docker Hub using Jenkins credentials and pushes both tags. Credentials are never logged. |
-| **Deploy** | `IMAGE_TAG=$BUILD_NUMBER docker compose up -d --no-build` | Reconciles the stack in place, polls container health for up to 150s, then smoke-tests the API through Nginx — including asserting that divide-by-zero still returns HTTP 400. |
-| **Post Actions** | `mail to: 'garvgrez@gmail.com', ...` | Sends an email notification on build success or failure with console link. |
+| Stage                  | Command / Action                                                          | Description                                                                                                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Checkout**     | `checkout scm`                                                          | Fetches the commit that triggered the build from GitHub.                                                                                                                        |
+| **Build**        | `mvn -B clean package -DskipTests`                                      | Compiles source files and produces the executable Spring Boot JAR.                                                                                                              |
+| **Test**         | `mvn -B test`                                                           | Executes 27 JUnit 5 unit and MockMvc integration tests; publishes JUnit XML reports. A failed test aborts the pipeline.                                                         |
+| **Docker Build** | `docker build -t $DOCKER_IMAGE:$BUILD_NUMBER -t $DOCKER_IMAGE:latest .` | Builds the multi-stage Docker image using cached dependencies and tags it with build number and `:latest`.                                                                    |
+| **Push**         | `withCredentials(...) { docker push ... }`                              | Authenticates securely to Docker Hub using Jenkins credentials and pushes both tags. Credentials are never logged.                                                              |
+| **Deploy**       | `IMAGE_TAG=$BUILD_NUMBER docker compose up -d --no-build`               | Reconciles the stack in place, polls container health for up to 150s, then smoke-tests the API through Nginx — including asserting that divide-by-zero still returns HTTP 400. |
+| **Post Actions** | `mail to: 'garvgrez@gmail.com', ...`                                    | Sends an email notification on build success or failure with console link.                                                                                                      |
 
 ---
 
 ### 4. Docker & Docker Compose Design
 
 #### Multi-Stage Dockerfile
+
 - **Stage 1 (Maven Builder):** Uses `maven:3.9-eclipse-temurin-17`. `pom.xml` is copied and `mvn dependency:go-offline` is executed first to leverage Docker layer caching.
 - **Stage 2 (Runtime):** Uses lightweight `bellsoft/liberica-openjre-alpine:17` (221 MB on disk, 66 MB compressed on Docker Hub). An unprivileged user `appuser` is created and assigned ownership. Port `8081` is exposed and the JVM is exec'd as PID 1 so container stop signals propagate cleanly.
 
 #### Multi-Container Deployment
+
 - **Replication:** Runs two identical application instances (`calculator-app-1` and `calculator-app-2`) listening on internal port 8081.
 - **Reverse Proxy:** Nginx distributes incoming requests using round-robin load balancing.
 - **Health Checks:** Both application instances and Nginx include automated health checks hitting `/actuator/health`. Nginx starts only after application containers report healthy (`condition: service_healthy`).
@@ -102,13 +106,16 @@ The declarative pipeline is versioned inside `Jenkinsfile`.
 
 ### 5. Challenges Faced & Solutions
 
-| Challenge | Root Cause | Solution |
-|---|---|---|
-| **Port Conflict on Port 8080** | Jenkins default port is 8080, causing `BindException` when running the application on the host. | Configured `server.port=8081` in `application.properties` and updated container internal ports to 8081. |
-| **Handling `NaN` and `Infinity`** | Standard `Double.parseDouble()` treats strings like `"NaN"` and `"Infinity"` as valid numbers. | Added input sanitization to explicitly check `Double.isNaN()` and `Double.isInfinite()` and return HTTP 400. |
-| **Arithmetic Overflow** | Multiplying large doubles (e.g., `1e308 * 10`) results in `Infinity` rather than an exception. | Added result bounds checking in `CalculatorService` to return HTTP 400 when results exceed finite representation. |
-| **Nginx IPv6 Healthcheck Failure** | Inside Alpine Linux containers, `localhost` may resolve to `::1` (IPv6), which Nginx is not bound to by default. | Explicitly bound health check to IPv4 address `http://127.0.0.1/actuator/health`. |
-| **Idempotent Deployment** | Rebuilding images on every `docker compose up` in the deploy stage slows down deployments and can fail if local context differs. | Tagged images during Docker Build stage and used `IMAGE_TAG=${BUILD_NUMBER} docker compose up -d --no-build` in Deploy stage. |
+| Challenge                                   | Root Cause                                                                                                                         | Solution                                                                                                                        |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Port Conflict on Port 8080**        | Jenkins default port is 8080, causing `BindException` when running the application on the host.                                  | Configured `server.port=8081` in `application.properties` and updated container internal ports to 8081.                     |
+| **Handling `NaN` and `Infinity`** | Standard `Double.parseDouble()` treats strings like `"NaN"` and `"Infinity"` as valid numbers.                               | Added input sanitization to explicitly check `Double.isNaN()` and `Double.isInfinite()` and return HTTP 400.                |
+| **Arithmetic Overflow**               | Multiplying large doubles (e.g., `1e308 * 10`) results in `Infinity` rather than an exception.                                 | Added result bounds checking in `CalculatorService` to return HTTP 400 when results exceed finite representation.             |
+| **Nginx IPv6 Healthcheck Failure**    | Inside Alpine Linux containers, `localhost` may resolve to `::1` (IPv6), which Nginx is not bound to by default.               | Explicitly bound health check to IPv4 address `http://127.0.0.1/actuator/health`.                                             |
+| **Idempotent Deployment**             | Rebuilding images on every `docker compose up` in the deploy stage slows down deployments and can fail if local context differs. | Tagged images during Docker Build stage and used `IMAGE_TAG=${BUILD_NUMBER} docker compose up -d --no-build` in Deploy stage. |
+| **Base image unavailable on ARM**     | `eclipse-temurin:17-jre-alpine` is published for `linux/amd64` only, so the runtime stage failed on Apple Silicon with `no match for platform in manifest`. | Switched the runtime stage to `bellsoft/liberica-openjre-alpine:17`, which publishes both `linux/amd64` and `linux/arm64` while staying Alpine-slim. |
+| **502 from Nginx after every redeploy** | `docker compose up` recreates the app containers with **new IP addresses**, but Nginx resolves its `upstream` hostnames once at worker startup and caches them — so it kept proxying to the dead containers. The health gate missed it because Nginx's own healthcheck still reported a *stale* `healthy` (5 retries × 10s before flipping). | Added a graceful `nginx -s reload` after the app replicas report healthy, which re-resolves the upstreams without dropping in-flight connections, followed by a bounded-retry smoke test that asserts **both** replicas are serving traffic. |
+| **Maven invisible to Jenkins**        | The Homebrew LaunchAgent starts Jenkins with a bare `PATH=/usr/bin:/bin:/usr/sbin:/sbin`, so `mvn` and `docker` could not be found, and Maven additionally refused to start without `JAVA_HOME`. | Set `PATH` and `JAVA_HOME=/opt/homebrew/opt/openjdk@17` as Jenkins global environment variables, keeping machine-specific paths out of the `Jenkinsfile`. |
 
 ---
 
