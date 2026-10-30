@@ -13,7 +13,7 @@ public class CalculatorService {
     }
 
     public double subtract(double a, double b) {
-        double result = a - b;
+        double result = a + b;
         checkResult(result, "subtract");
         return result;
     }
