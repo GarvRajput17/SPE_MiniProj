@@ -1,0 +1,46 @@
+flowchart TB
+
+  %% ---------------- trigger path ----------------
+  DEV["<b>Developer laptop</b><br/>code and commits on macOS"]
+  GH["<b>GitHub repository</b><br/>GarvRajput17/SPE_MiniProj"]
+  NGROK["<b>ngrok tunnel</b><br/>public URL for Jenkins"]
+
+  DEV -- "git push" --> GH
+  GH -- "webhook" --> NGROK
+  NGROK -- "POST /github-webhook/" --> CHECKOUT
+
+  %% ---------------- Jenkins ----------------
+  subgraph JENKINS["Jenkins LTS on macOS (Homebrew) &nbsp;·&nbsp; declarative Jenkinsfile from the repo"]
+    direction LR
+    CHECKOUT["Checkout"] --> BUILD["Build"] --> TEST["Test"]
+    TEST --> DBUILD["Docker Build"] --> PUSH["Push"] --> DEPLOY["Deploy"]
+  end
+
+  %% ---------------- outputs ----------------
+  GMAIL["<b>Gmail</b><br/>success or failure notice"]
+  HUB["<b>Docker Hub</b><br/>garvrajput17/calculator"]
+
+  subgraph COMPOSE["Compose stack &nbsp;(calc-net)"]
+    direction TB
+    NGINX["<b>Nginx reverse proxy</b><br/>host port 80, round-robin"]
+    R1["<b>Replica 1</b><br/>port 8081"]
+    R2["<b>Replica 2</b><br/>port 8081"]
+    NGINX --> R1
+    NGINX --> R2
+  end
+
+  JENKINS -. "email on every result" .-> GMAIL
+  PUSH   -- "docker push :N and :latest" --> HUB
+  DEPLOY -- "compose up -d"              --> NGINX
+
+  %% ---------------- styling ----------------
+  classDef card  fill:#ffffff,stroke:#c9c9c9,stroke-width:1px,color:#1a1a1a
+  classDef stage fill:#f7f7f7,stroke:#d4d4d4,stroke-width:1px,color:#1a1a1a
+  classDef blue  fill:#d7e6f7,stroke:#c3dbf2,stroke-width:1px,color:#1a1a1a
+
+  class DEV,GH,NGROK,GMAIL,HUB card
+  class CHECKOUT,BUILD,TEST,DBUILD,PUSH,DEPLOY stage
+  class NGINX,R1,R2 blue
+
+  style JENKINS fill:#ededed,stroke:#e0e0e0,color:#1a1a1a
+  style COMPOSE fill:#eaf2fb,stroke:#1f6fd0,stroke-width:2px,color:#1a1a1a
