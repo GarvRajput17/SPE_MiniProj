@@ -56,5 +56,6 @@ public class CalculatorController {
         double b = calculatorService.parseParameter(bStr, "b");
         double result = calculatorService.divide(a, b);
         return ResponseEntity.ok(new CalculatorResponse("divide", a, b, result));
+        // a smol edit dooesnt hurt
     }
 }
